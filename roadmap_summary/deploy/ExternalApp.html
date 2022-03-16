@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Roadmap Summary Report</title>
+    <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
+    <!--  Build Date: Thu Mar 26 2015 09:39:52 GMT-0700 (PDT) -->
+    
+    <script type="text/javascript">
+        var APP_BUILD_DATE = "Thu Mar 26 2015 09:39:52 GMT-0700 (PDT)";
+        var CHECKSUM = [%= checksum %];
+    </script>
+    
+    <script type="text/javascript" src="https://rally1.rallydev.com/apps/2.0rc3/sdk-debug.js?apiKey=_fx6moP2oSEWpkTflGhkHUyePBjkEUfElixQELb9dF8"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+             
+/*
+Tree combo
+Use with 'Ext.data.TreeStore'
+
+
+If store root note has 'checked' property tree combo becomes multiselect combo (tree store must have records with 'checked' property)
+
+
+Has event 'itemclick' that can be used to capture click
+
+
+Options:
+selectChildren - if set true and if store isn't multiselect, clicking on an non-leaf node selects all it's children
+canSelectFolders - if set true and store isn't multiselect clicking on a folder selects that folder also as a value
+
+
+Use:
+
+
+single leaf node selector:
+selectChildren: false
+canSelectFolders: false
+- this will select only leaf nodes and will not allow selecting non-leaf nodes
+
+
+single node selector (can select leaf and non-leaf nodes)
+selectChildren: false
+canSelectFolders: true
+- this will select single value either leaf or non-leaf
+
+
+children selector:
+selectChildren: true
+canSelectFolders: true
+- clicking on a node will select it's children and node, clicking on a leaf node will select only that node
+
+
+This config:
+selectChildren: true
+canSelectFolders: false
+- is invalid, you cannot select children without node
+
+
+*/
+Ext.define('Ext.ux.TreeCombo',
+{
+    extend: 'Ext.form.field.Picker',
+    alias: 'widget.treecombo',
+    tree: false,
+    constructor: function(config)
+    {
+        this.addEvents(
+        {
+            "itemclick" : true
+        });
+
+
+        this.listeners = config.listeners;
+        this.callParent(arguments);
+    },
+    records: [],
+    recursiveRecords: [],
+    ids: [],
+    selectChildren: true,
+    canSelectFolders: true,
+    multiselect: false,
+    displayField: 'text',
+    valueField: 'id',
+    treeWidth: 300,
+    matchFieldWidth: false,
+    treeHeight: 400,
+    masN: 0,
+    recursivePush: function(node, setIds)
+    {
+        var me = this;
+
+
+        me.addRecRecord(node);
+        if(setIds) me.addIds(node);
+        
+        node.eachChild(function(nodesingle)
+        {
+            if(nodesingle.hasChildNodes() == true)
+            {
+                me.recursivePush(nodesingle, setIds);
+            }
+            else
+            {
+                me.addRecRecord(nodesingle);
+                if(setIds) me.addIds(nodesingle);
+            }
+        });
+    },
+    recursiveUnPush: function(node)
+    {
+        var me = this;
+        me.removeIds(node);
+        
+        node.eachChild(function(nodesingle)
+        {
+            if(nodesingle.hasChildNodes() == true)
+            {
+                me.recursiveUnPush(nodesingle);
+            }
+            else me.removeIds(nodesingle);
+        });
+    },
+    addRecRecord: function(record)
+    {
+        var me = this;
+
+
+        for(var i=0,j=me.recursiveRecords.length;i<j;i++)
+        {
+            var item = me.recursiveRecords[i];
+            if(item)
+            {
+                if(item.getId() == record.getId()) return;
+            }
+        }
+        me.recursiveRecords.push(record);
+    },
+    afterLoadSetValue: false,
+    setValue: function(valueInit)
+    {
+        if(typeof valueInit == 'undefined') return;
+        
+        var me = this,
+            tree = this.tree,
+            values = (valueInit == '') ? [] : valueInit.split(','),
+            valueFin = [];
+            
+        inputEl = me.inputEl;
+
+
+        if(tree.store.isLoading())
+        {
+            me.afterLoadSetValue = valueInit;
+        }
+
+
+        if(inputEl && me.emptyText && !Ext.isEmpty(values))
+        {
+            inputEl.removeCls(me.emptyCls);
+        }
+
+
+        if(tree == false) return false;
+        
+        var node = tree.getRootNode();
+        if(node == null) return false;
+        
+        me.recursiveRecords = [];
+        me.recursivePush(node, false);
+        
+        me.records = [];
+        Ext.each(me.recursiveRecords, function(record)
+        {
+            var id = record.get(me.valueField),
+                index = values.indexOf(''+id);
+        
+            if(me.multiselect == true) record.set('checked', false);
+            
+            if(index != -1)
+            {
+                valueFin.push(record.get(me.displayField));
+                if(me.multiselect == true) record.set('checked', true);
+                me.addRecord(record);
+            }
+        });
+
+
+        me.value = valueInit;
+        me.setRawValue(valueFin.join(', '));
+        
+        me.checkChange();
+        me.applyEmptyText();
+        return me;
+    },
+    getValue: function() 
+    {
+        return this.value;
+    },
+    getSubmitValue: function()
+    {
+        return this.value;
+    },
+    checkParentNodes: function(node)
+    {
+        if(node == null) return;
+        
+        var me = this,
+            checkedAll = true;
+
+
+        node.eachChild(function(nodesingle)
+        {
+            var id = nodesingle.getId(),
+                index = me.ids.indexOf(''+id);
+                
+            if(index == -1) checkedAll = false;
+        });
+        
+        if(checkedAll == true)
+        {
+            me.addIds(node);
+            me.checkParentNodes(node.parentNode);
+        }
+        else
+        {
+            me.removeIds(node);
+            me.checkParentNodes(node.parentNode);
+        }
+    },
+    initComponent: function() 
+    {
+        var me = this;
+        
+        me.tree = Ext.create('Ext.tree.Panel',
+        {
+            alias: 'widget.assetstree',
+            hidden: true,
+            minHeight: 300,
+            rootVisible: (typeof me.rootVisible != 'undefined') ? me.rootVisible : true,
+            floating: true,
+            useArrows: true,
+            width: me.treeWidth,
+            autoScroll: true,
+            height: me.treeHeight,
+            store: me.store,
+            listeners:
+            {
+                load: function(store, records)
+                {
+                    if(me.afterLoadSetValue != false)
+                    {
+                        me.setValue(me.afterLoadSetValue);
+                    }
+                },
+                itemclick:  function(view, record, item, index, e, eOpts)
+                {
+                    me.itemTreeClick(view, record, item, index, e, eOpts, me)
+                }
+            }
+        });
+        
+        if(me.tree.getRootNode().get('checked') != null) me.multiselect = true;
+        
+        this.createPicker = function()
+        {
+            var me = this;
+            return me.tree;
+        };
+        
+        this.callParent(arguments);
+    },
+    addIds: function(record)
+    {
+        var me = this;
+        
+        if(me.ids.indexOf(''+record.getId()) == -1) me.ids.push(''+record.get(me.valueField));
+    },
+    removeIds: function(record)
+    {
+        var me = this,
+            index = me.ids.indexOf(''+record.getId());
+            
+        if(index != -1)
+        {
+            me.ids.splice(index, 1);
+        }
+    },
+    addRecord: function(record)
+    {
+        var me = this;
+
+
+        for(var i=0,j=me.records.length;i<j;i++)
+        {
+            var item = me.records[i];
+            if(item)
+            {
+                if(item.getId() == record.getId()) return;
+            }
+        }
+        me.records.push(record);
+    },
+    removeRecord: function(record)
+    {
+        var me = this;
+
+
+        for(var i=0,j=me.records.length;i<j;i++)
+        {
+            var item = me.records[i];
+            if(item && item.getId() == record.getId()) delete(me.records[i]);
+        }
+    },
+    itemTreeClick: function(view, record, item, index, e, eOpts, treeCombo)
+    {
+        var me = treeCombo,
+            checked = !record.get('checked');//it is still not checked if will be checked in this event
+        
+        if(me.multiselect == true) record.set('checked', checked);//check record
+        
+        var node = me.tree.getRootNode().findChild(me.valueField, record.get(me.valueField), true);
+        if(node == null) 
+        {
+            if(me.tree.getRootNode().get(me.valueField) == record.get(me.valueField)) node = me.tree.getRootNode();
+            else return false;
+        }
+        
+        if(me.multiselect == false) me.ids = [];
+        
+        //if it can't select folders and it is a folder check existing values and return false
+        if(me.canSelectFolders == false && record.get('leaf') == false)
+        {
+            me.setRecordsValue(view, record, item, index, e, eOpts, treeCombo);
+            return false;
+        }
+        
+        //if record is leaf
+        if(record.get('leaf') == true) 
+        {
+            if(checked == true)
+            {
+                me.addIds(record);
+            }
+            else
+            {
+                me.removeIds(record);
+            }
+        }
+        else //it's a directory
+        {           
+            me.recursiveRecords = [];
+            if(checked == true)
+            {
+                if(me.multiselect == false)
+                {
+                    if(me.canSelectFolders == true) me.addIds(record); 
+                }
+                else
+                {
+                    if(me.canSelectFolders == true)
+                    {
+                        me.recursivePush(node, true);
+                    }
+                }
+            }
+            else
+            {
+                if(me.multiselect == false)
+                {
+                    if(me.canSelectFolders == true) me.recursiveUnPush(node);
+                    else me.removeIds(record);
+                }
+                else me.recursiveUnPush(node);
+            }
+        }
+        
+        //this will check every parent node that has his all children selected
+        if(me.canSelectFolders == true && me.multiselect == true) me.checkParentNodes(node.parentNode);
+        
+        me.setRecordsValue(view, record, item, index, e, eOpts, treeCombo);
+    },
+    fixIds: function()
+    {
+        var me = this;
+        
+        for(var i=0,j=me.ids.length;i<j;i++)
+        {
+            if(me.ids[i] == 'NaN') me.ids.splice(i, 1);
+        }
+    },
+    setRecordsValue: function(view, record, item, index, e, eOpts, treeCombo)
+    {
+        var me = treeCombo;
+        
+        me.fixIds();
+        
+        me.setValue(me.ids.join(','));
+
+
+        me.fireEvent('itemclick', me, record, item, index, e, eOpts, me.records, me.ids);
+
+
+        if(me.multiselect == false) me.onTriggerClick();
+    }   
+});
+/**
+ * A link that pops up a version dialog box
+ */
+
+Ext.define('Rally.technicalservices.InfoLink',{
+    extend: 'Ext.Component',
+    alias: 'widget.tsinfolink',
+    
+    /**
+     * @cfg {String} informationHtml
+     * Additional text to be displayed on the popup dialog (for exmaple,
+     * to add a description of the app's use or functionality)
+     */
+    informationHtml: null,
+    
+    /**
+     * 
+     * cfg {String} title
+     * The title for the dialog box
+     */
+     title: "Build Information",
+    
+    renderTpl: "<div id='{id}-infolinkWrap' class='tsinfolink'>i</div>",
+
+    initComponent: function() {
+        this.callParent(arguments);
+       
+    },
+    
+    onRender: function() {
+        this.callParent(arguments);
+        this.mon(this.el,'click',this.onClick,this);
+    },
+    _generateChecksum: function(string){
+        var chk = 0x12345678,
+            i;
+        string = string.replace(/var CHECKSUM = .*;/,"");
+        string = string.replace(/\s/g,"");  //Remove all whitespace from the string.
+        
+        for (i = 0; i < string.length; i++) {
+            chk += (string.charCodeAt(i) * i);
+        }
+    
+        return chk;
+    },
+    _checkChecksum: function(container) {
+        var me = this;
+        Ext.Ajax.request({
+            url: document.URL,
+            params: {
+                id: 1
+            },
+            success: function (response) {
+                text = response.responseText;
+                if ( CHECKSUM ) {
+                    if ( CHECKSUM !== me._generateChecksum(text) ) {
+                        console.log("Checksums don't match!");
+                        if ( me.dialog ) {
+                            me.dialog.add({xtype:'container',html:'Checksums do not match'});
+                        }
+                    }
+                }
+            }
+        });
+    },
+    onClick: function(e) {
+        var me = this;
+        this._checkChecksum(this);
+        
+        var dialog_items = [];
+        
+        if ( this.informationHtml ) {
+            dialog_items.push({
+                xtype:'container',
+                html: this.informationHtml
+            });
+        }
+                
+        dialog_items.push({
+            xtype:'container',
+            html:"This app was created by the Rally Technical Services Team."
+        });
+        
+        if ( APP_BUILD_DATE ) {
+            dialog_items.push({
+                xtype:'container',
+                html:'Build date/time: ' + APP_BUILD_DATE
+            });
+        }
+        
+        if (this.dialog){this.dialog.destroy();}
+        this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
+            defaults: { padding: 5, margin: 5 },
+            closable: true,
+            draggable: true,
+            title: me.title,
+            items: dialog_items
+        });
+        this.dialog.show();
+    }
+});
+
+/*
+ */
+Ext.define('Rally.technicalservices.Logger',{
+    constructor: function(config){
+        Ext.apply(this,config);
+    },
+    log: function(args){
+        var timestamp = "[ " + Ext.util.Format.date(new Date(), "Y-m-d H:i:s.u") + " ]";
+        //var output_args = arguments;
+        //output_args.unshift( [ "[ " + timestamp + " ]" ] );
+        //output_args = Ext.Array.push(output_args,arguments);
+        
+        var output_args = [];
+        output_args = Ext.Array.push(output_args,[timestamp]);
+        output_args = Ext.Array.push(output_args, Ext.Array.slice(arguments,0));
+
+        window.console && console.log.apply(console,output_args);
+    }
+
+});
+
+Ext.define('Rally.technicalservices.board.RoadmapBoard',{
+    extend: 'Ext.container.Container',
+    alias: 'widget.tsroadmapboard',
+    scheduled_items: [], /* items that will show up in the quarter columns (e.g., releases) */
+    config: {
+        /*
+         * @cfg {Ext.data.model} records The items to be placed on the timeboxes
+         */
+        records: [],
+        /*
+         * @cfg {String} date_field The field that holds the date used to determine placement
+         * 
+         */
+        date_field: 'PlannedEndDate',
+        /*
+         * @cfg {Date} start_date  The date from which to start displaying quarters
+         */
+        start_date: new Date(),
+        /*
+         * @cfg {Number} margin
+         */
+        margin: 0
+    },
+    constructor: function(config){
+        this.callParent(arguments);
+        this.initConfig(config);
+    },
+    initComponent: function() {
+        this.callParent(arguments);
+        
+        this.addEvents(
+            /**
+             * @event
+             * Fired when a record marker is clicked on 
+             * 
+             * @param {Sprite} the text marker that was clicked
+             * @param {Ext.data.Model} the record that the marker represents
+             */
+            'clickMarker'
+        );
+
+        this.height = this.height || 400;
+        this.width = this.width || 800;
+        this.margin = this.margin || 2;
+        
+        var timeboxes = this._createTimeboxes();
+        
+        this.canvas = Ext.create('Ext.draw.Component',{
+            viewBox: false,
+            width: this.width,
+            height: this.height,
+            items: timeboxes
+        });
+        
+        this.container = Ext.create('Ext.container.Container', {
+            width: this.width,
+            height: this.height,
+            items:[this.canvas]
+        });
+        
+        this.target.add(this.container);
+    },
+    
+    _createTimeboxes: function() {
+        var timeboxes = [];
+        var records_to_place = this.records;
+        var year_start_date = this._getStartOfQuarter( this.start_date );
+        
+        for ( var i=0; i<3; i++ ) {
+            var width = (this.width - ( 2* this.margin )) / 3  ;
+            var height = this.height - ( 2 * this.margin );
+            var x =  ( i * width) + this.margin;
+            var y = 0 + this.margin;
+            
+            var start_date = Rally.util.DateTime.add(year_start_date,'month', 3*i);
+            
+            timeboxes.push(this._getQuarterTimebox(x,y,width,height,start_date,records_to_place));
+        }
+        
+        return Ext.Array.flatten(timeboxes);
+    },
+    _getQuarterTimebox: function(x,y, width, height, start_date, records_to_place) {
+        width = width - 5;
+        var end_date = Rally.util.DateTime.add(start_date,"month",3);
+        
+        var records_in_quarter = [];
+        Ext.Array.each( records_to_place,function(record){ 
+            var record_date = record.get(this.date_field);
+
+            if ( record_date > start_date && record_date < end_date ) {
+                records_in_quarter.push(record);
+            }
+        },this);
+
+        var quarter_timebox_columns = this._getQuarterTimeboxColumns(x,y,width,height,start_date,records_in_quarter);
+        
+        var timebox = Ext.create('Ext.draw.Sprite', {
+            type:'rect',
+            width: width,
+            height: height,
+            x: x,
+            y: y,
+            opacity: 0.5,
+            'stroke-width': 2,
+            margin: 5
+        });
+        return [ timebox, quarter_timebox_columns, this._getQuarterTimeboxHeader(x,y,width,start_date) ];
+    },
+    _getQuarterTimeboxHeader: function(x,y, width, start_date) {
+        var height = 50;
+        
+        var header = Ext.create('Ext.draw.Sprite', {
+            type:'rect',
+            width: width,
+            height: height,
+            x: x,
+            y: y,
+            fill: '#5882FA',
+            opacity: 1,
+            'stroke-width': 2,
+            margin: 5
+        });
+        
+        var font_size = 24;
+        var text = this._getQuarterForDate(start_date);
+        var header_text = Ext.create( 'Ext.draw.Sprite', {
+            type: 'text',
+            text: text,
+            x: x + width/2 - font_size,
+            y: y + height/2, 
+            fill: '#fff',
+            font: this._getFont(font_size)
+        } );
+        
+        var sub_headers = this._getQuarterTimeboxSubHeaders(x,y,width,100, start_date);
+        
+        return [ header, header_text, sub_headers ];
+    },
+    _getQuarterTimeboxSubHeaders: function(parent_x, parent_y, parent_width, parent_height, start_date){
+        var y = parent_y + 0.5 * parent_height; 
+        var width = 0.33333 * parent_width;
+        var height = 0.5 * parent_height;
+        
+        var sub_headers = [];
+        for ( var i=0; i<3; i++ ) {
+            var x = parent_x + ( i * width );
+            var month_start = Rally.util.DateTime.add(start_date, "month", i);
+            
+            sub_headers.push(Ext.create('Ext.draw.Sprite', {
+                type:'rect',
+                width: width,
+                height: height,
+                x: x,
+                y: y,
+                fill: '#5882FA',
+                opacity: 1,
+                'stroke-width': 2,
+                margin: 5
+            }));
+            
+            var text = Ext.util.Format.date(month_start,"M");
+            var font_size = 20;
+            sub_headers.push(Ext.create( 'Ext.draw.Sprite', {
+                type: 'text',
+                text: text,
+                x: x + width/2 - font_size,
+                y: y + height/2, 
+                fill: '#fff',
+                font: this._getFont(font_size)
+            } ));
+            
+        }
+        return sub_headers;
+    },
+    _getQuarterTimeboxColumns: function(parent_x, parent_y, parent_width, parent_height, start_date, records_to_place){
+        var y = parent_y; 
+        var width = 0.33333 * parent_width;
+        var height = parent_height;
+        
+        var sub_columns = [];
+        var record_marks = [];
+        var start_marks_y = y + 100;
+        
+        for ( var i=0; i<3; i++ ) {
+            var x = parent_x + ( i * width );
+            //start_marks_y = start_marks_y + i*27; // shift down to keep from overlapping
+            
+            var month_start = Rally.util.DateTime.add(start_date, "month", i);
+            var month_end = Rally.util.DateTime.add(month_start,"month",1);
+            
+            var records_in_month = [];
+            
+            Ext.Array.each(records_to_place,function(record){
+                var record_date = record.get(this.date_field);
+    
+                if ( record_date > month_start && record_date < month_end ) {
+                    records_in_month.push(record);
+                }
+
+            },this);
+            
+            var record_marks = Ext.Array.push( record_marks, this._getRecordMarks(x,start_marks_y,width,height,records_in_month));
+
+            sub_columns.push(Ext.create('Ext.draw.Sprite', {
+                type:'rect',
+                width: width,
+                height: height,
+                x: x,
+                y: y,
+                stroke: 'white',
+                fill: '#EFF5FB',
+                opacity: 0.5,
+                'stroke-width': 2,
+                margin: 5
+            }));
+        }
+        return [ sub_columns, record_marks];
+    },
+    _getRecordMarks: function(start_x,start_y,container_width, container_height, records_to_place){
+        var me = this;
+        
+        var x = start_x + ( 0.25 * container_width);
+        var y = start_y;
+        
+        var font_size = 14;
+        var marks = [];
+        Ext.Array.each(records_to_place,function(record){
+            var text = record.get('Name');
+            
+            var x_text_start = x + 4 + font_size/8;
+            var x_text_end = x + 4 + this._getTextWidth( text, font_size );
+            
+            y = this._getSafeY( x, x_text_end, y + font_size + 7, font_size );
+
+            var text_sprite = Ext.create( 'Ext.draw.Sprite', {
+                type: 'text',
+                text: text,
+                x: x_text_start,
+                y: y, 
+                fill: '#000',
+                font: this._getFont(font_size),
+                listeners: {
+                    click: function(){
+                        console.log('click',this,record);
+                        me.fireEvent('clickMarker',this,record);
+                    }
+                }
+            } );
+            
+            var marker_sprite = Ext.create('Ext.draw.Sprite',{
+                type: 'circle',
+                radius: font_size / 4,
+                x: x,
+                y: y-2,
+                fill: 'green'
+            });
+            
+            marks.push(marker_sprite);
+            
+            marks.push(text_sprite);
+            this.scheduled_items.push( {x_text_start: x_text_start, x_text_end: x_text_end, y: y} );
+            
+//            marks.push(Ext.create('Ext.draw.Sprite',{
+//                type: 'circle',
+//                radius: font_size / 4,
+//                x: x_text_end,
+//                y: y-2,
+//                fill: 'blue'
+//            }));
+            
+        },this);
+        
+        return marks;
+    },
+    _getTextWidth: function( text, font_size ){
+        return text.length * font_size/2;
+    },
+    _getFont: function(font_size) {
+        var font_string = font_size + "px Arial";
+        return font_string;
+    },
+    _getQuarterForDate: function getQuarter(d) {
+      d = d || new Date(); // If no date supplied, use today
+      var q = [1,2,3,4];
+      return "Q" + q[Math.floor(d.getMonth() / 3)];
+    },
+    _getStartOfQuarter: function( check_date ) {
+        var quarter_start_year = check_date.getFullYear();
+        
+        var quarter_start_months = [0, 3, 6, 9];
+        var quarter_start_month = quarter_start_months[Math.floor(check_date.getMonth() / 3)];
+        
+        var quarter_start = new Date(quarter_start_year, quarter_start_month, 1);
+        
+        return quarter_start;
+    },
+    /*
+     * check for overlapping text markers
+     */
+    _getSafeY: function( x_text_start,x_text_end, y, font_size ){
+        //y + font_size + 7
+        var safe = true;
+        Ext.Array.each(this.scheduled_items,function(item){
+            var test_x_text_start = item.x_text_start;
+            var test_x_text_end = item.x_text_end;
+            var test_y = item.y;
+            
+            if ( y < test_y + 5 && y > test_y - 5 ) {
+                if ( x_text_start >= test_x_text_start && x_text_start <= test_x_text_end  ) {
+                    safe = false;
+                }
+            }
+        });
+        
+        var new_y = y;
+        if ( !safe ) {
+            new_y = this._getSafeY(x_text_start,x_text_end, y+font_size+7, font_size);
+        }
+        return new_y;
+    }
+});
+/**
+ **/
+    Ext.define('Rally.technicalservices.picker.TagTreePicker', {
+        extend: 'Ext.ux.TreeCombo',
+        alias: 'widget.tstagtreepicker',
+
+        componentCls: 'rui-triggerfield rui-project-picker',
+
+        placeholderCls: 'rui-multi-object-placeholder',
+
+        editable: false,
+
+        /**
+         * @cfg {String}
+         * Text shown during initial load
+         */
+        loadingText: 'Loading...',
+        /**
+         * @cfg {String}
+         * Separator to define folder breaks
+         */
+        separator: ':',
+        /**
+         * @cfg {String} displayField
+         * The field inside the model that will be used as the node's text.
+         * Defaults to the default value of {@link Ext.tree.Panel}'s `displayField` configuration.
+         */
+        displayField: 'text',
+        
+        selectChildren: true,
+        
+        canSelectFolders: true,
+
+        multiselect: true,
+
+            
+        initComponent: function () {
+            var me = this;
+            
+            this.store = Ext.create('Ext.data.TreeStore', {
+                root: {}
+            });
+            
+            this._getTagRootNode().then({
+                scope: this,
+                success: function(root) {
+                    this.store.setRootNode(root);
+                },
+                failure: function(message) {
+                    Ext.msg.alert(message);
+                }
+            });
+            
+            me.callParent(arguments);
+        },
+
+        _getTagRootNode: function () {
+            var deferred = Ext.create('Deft.Deferred');
+            var me = this;
+            
+            Ext.create('Rally.data.wsapi.Store',{
+                model: 'tag',
+                autoLoad: true,
+                sorters: [{property:'Name',direction:'ASC'}],
+                filters: [{property:'Archived', value: 'false'}]
+            }).load({
+                callback : function(records, operation, successful) {
+                    if (successful){
+                        var root = this._createRootNode(records);
+                        deferred.resolve(root);
+                    } else {
+                        me.logger.log("Failed: ", operation);
+                        deferred.reject('Problem getting stories: ' + operation.error.errors.join('. '));
+                    }
+                },
+                scope: this
+            });
+            
+            return deferred.promise;
+        },
+        
+        // assume that tag objects are provided in order of Name
+        _createRootNode: function(tags) {
+            var hash = {};
+            
+            Ext.Array.each( tags, function(tag){
+                var name = tag.get('Name');
+                var name_array = name.split(this.separator);
+                
+                hash = this._setHashValue(hash,name,name_array);
+            },this);
+                        
+            var root = {
+                text: 'Tags',
+                expanded: 'true',
+                children: []
+            };
+                
+            Ext.Object.each(hash, function(key,value){
+                if ( value.rootItem ) {
+                    root.children.push(value);
+                }
+            });
+
+            return root;
+        },
+        
+        _counterValue: 1,
+        
+        _getCounterValue: function() {
+            this._counterValue = this._counterValue + 1;
+            return this._counterValue;
+        },
+        
+        _setHashValue: function(hash,full_name,name_array,parent) {
+            if ( name_array.length > 0 ) {
+                var name = name_array[0];
+                var item_hash = {
+                    id: full_name,
+                    text: name,
+                    children:[],
+                    leaf: true,
+                    checked: false,
+                    rootItem: false
+                };
+                
+                if( parent ) {
+                    parent.children.push(item_hash);
+                }
+                
+                if ( !parent ) {
+                    item_hash.rootItem = true;
+                }
+                
+                if ( !hash[name] ) {
+                    hash[name] = item_hash;
+                }
+                
+                if (name_array.length > 1) {
+                    item_hash.leaf = false;
+                    item_hash.id = name;
+                    name_array.shift();
+                    this._setHashValue(hash,full_name,name_array,hash[name]);
+                }
+            }
+            
+            return hash;
+        }
+    });
+Ext.define('CustomApp', {
+    extend: 'Rally.app.App',
+    componentCls: 'app',
+    logger: new Rally.technicalservices.Logger(),
+    
+    scheduleableModel: 'PortfolioItem/Feature',
+    dateField: 'PlannedEndDate',
+    
+    items: [
+        {xtype:'container',itemId:'selector_box', margin: 5},
+        {xtype:'container',itemId:'display_box'},
+        {xtype:'tsinfolink'}
+    ],
+    launch: function() {
+        this._addSelectors(this.down('#selector_box'));
+    },
+    
+    _addSelectors: function(container) {
+        container.add({ 
+            xtype: 'tstagtreepicker',
+            fieldLabel: 'Use Tags:',
+            listeners: {
+                scope: this,
+                blur: function(picker) {
+                    console.log("HA!",picker.getValue());
+                    var filters = null;
+                    if ( !Ext.isEmpty(picker.getValue()) ){
+                        var values = picker.getValue().split(',');
+                        
+                        var filter_configs = Ext.Array.map(values,function(name){
+                            return { property:'Tags.Name',operator:'contains',value:name };
+                        });
+                        filters = Rally.data.wsapi.Filter.or(filter_configs);
+                    }
+                    this._getRecords(this.scheduleableModel, ['Name',this.dateField], filters).then({
+                        scope: this,
+                        success: function(records){
+                            this.logger.log('records',records);
+                            this.down('#display_box').removeAll();
+                            
+                            Ext.create('Rally.technicalservices.board.RoadmapBoard',{
+                                width: this.getWidth(),
+                                height: this.getHeight(),
+                                target: this.down('#display_box'),
+                                records: records,
+                                date_field: this.dateField,
+                                listeners: {
+                                    scope: this,
+                                    clickMarker: this._showReleaseInfo
+                                },
+                                margin: 15
+                            },this);
+                        },
+                        failure: function(error_message){
+                            alert(error_message);
+                        }
+                    });
+                }
+            }
+        });
+    },
+    
+    _showReleaseInfo: function(marker,release) {
+        this.logger.log("clicked with ", marker, release);
+        
+        var dialog = Ext.create('Rally.ui.dialog.Dialog',{
+            autoShow: true,
+            draggable: true,
+            closable: true,
+            width: 300,
+            title: release.get('Name')
+         });
+         
+         dialog.add({
+            xtype: 'rallygrid',
+            storeConfig: {
+                model:'PortfolioItem/Feature',
+                filters: [{property:'Release.Name', value:release.get('Name')}]
+            },
+            columnCfgs: [{dataIndex:'FormattedID',text:'id'},{dataIndex:'Name',text:'Name'}]
+         });
+    },
+    
+    _getRecords: function(model_name, model_fields, filters){
+        var deferred = Ext.create('Deft.Deferred');
+        
+        if ( !filters ) {
+            filters = [{property:'ObjectID',operator:'>',value:0}];
+        }
+        var context = {
+            projectScopeDown: this.getContext().getProjectScopeDown()
+        };
+                
+        if ( model_name == "Release" ) {
+            context = {
+                projectScopeDown: false
+            }
+        }
+        Ext.create('Rally.data.wsapi.Store', {
+            model: model_name,
+            fetch: model_fields,
+            filters: filters,
+            autoLoad: true,
+            context: context,
+            sorters: [{property: 'Name'}],
+            listeners: {
+                load: function(store, records, successful) {
+                    if (successful){
+                        deferred.resolve(records);
+                    } else {
+                        deferred.reject('Failed to load store for model [' + model_name + '] and fields [' + model_fields.join(',') + ']');
+                    }
+                }
+            }
+        });
+        return deferred.promise;
+    }
+});
+            
+               Rally.launchApp('CustomApp', {
+                   name: 'Roadmap Summary Report'
+               });
+        });
+    </script>
+    
+    <style type="text/css">
+
+.app {
+}
+.tsinfolink {
+    position:absolute;
+    right:0px;
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    text-align: center;
+    color: white;
+    background: #C0C0C0;
+    border-style: solid;
+    border-width: 1px;
+    margin-top: 25px;
+    margin-right: 5px;
+    cursor: pointer;
+}
+
+.x-tree-icon {
+    background: none;
+}
+    
+.x-grid-tree-node-expanded .x-tree-icon-parent {
+    background: none;
+}
+.x-grid-row  .x-tree-icon-leaf {
+    background-image:none;
+}
+    </style>
+
+</head>
+<body></body>
+</html>
